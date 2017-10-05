@@ -8,17 +8,14 @@ import (
 )
 
 type User struct {
-	uname string //username
-	psw   string //password
+	uname    string //username
+	psw      string //password
+	messages []string
 }
 
-var user_map map[string]User = make(map[string]User)
+var user_map map[string]*User = make(map[string]*User)
 
-var my_user User
-
-var message_map map[string][]string = make(map[string][]string)
-
-//key is username, value is array of messages from that user
+var my_user *User
 
 func login(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -51,7 +48,6 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		page, err := ioutil.ReadFile("./sign up.html")
-		fmt.Println("inside sign up")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -66,7 +62,7 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 		} else {
 			// Create new user
 			user_map[r.PostFormValue("uname")] =
-				User{r.PostFormValue("uname"), r.PostFormValue("psw")}
+				&User{r.PostFormValue("uname"), r.PostFormValue("psw"), []string{}}
 
 			w.Header().Set("method", "GET")
 			http.Redirect(w, r, "/success sign up", http.StatusTemporaryRedirect)
@@ -103,7 +99,9 @@ func sucess_new_post(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// Parse the form
 		r.ParseForm()
-		message_map[my_user.uname] = append(message_map[my_user.uname], r.PostFormValue("message"))
+		my_user.messages = append(my_user.messages, r.PostFormValue("message"))
+		user_map[my_user.uname].messages = my_user.messages
+		//fmt.Printf("user has %d message\n", len(my_user.messages))
 		fmt.Fprintf(w, "successlly posted new message. Please go back")
 	}
 }
@@ -111,18 +109,11 @@ func browse(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		//just print everyone's post
-		for username, message_array := range message_map {
-			fmt.Fprintf(w, username)
-			fmt.Fprintf(w, " Posted\n")
-			for _, message := range message_array {
-
-				fmt.Fprintf(w, message)
-			}
-		}
+		fmt.Fprintf(w, "please browse from home page")
 	case http.MethodPost:
 		// Parse the form
 		r.ParseForm()
-		searched_username := user_map[r.PostFormValue("uname")].uname
+		searched_user := user_map[r.PostFormValue("uname")]
 		page := `<!DOCTYPE html>
 				<html lang="en">
 				<head>
@@ -136,18 +127,20 @@ func browse(w http.ResponseWriter, r *http.Request) {
 				</html>`
 		//show last ten messages from the searched user
 		print_data := ""
-		message_array := message_map[searched_username]
+		message_array := searched_user.messages
+		//fmt.Printf("There are %d messages\n", len(message_array))
 		if len(message_array) > 10 {
 			message_array = message_array[len(message_array)-10:]
 		}
 		for _, message := range message_array {
-			print_data = print_data + message + "\n"
+			print_data = print_data + "<p>" + message + "</p>"
 		}
-		fmt.Fprintf(w, page, searched_username, print_data)
+		fmt.Fprintf(w, page, searched_user.uname, print_data)
 	}
 
 }
 func main() {
+	user_map["admin"] = &User{"admin", "admin", []string{}} //default user for faster testing
 	http.HandleFunc("/", login)
 	http.HandleFunc("/sign up", sign_up)
 	http.HandleFunc("/success sign up", success_sign_up)
