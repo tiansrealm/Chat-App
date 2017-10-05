@@ -1,23 +1,24 @@
 package main
 
 import (
-    "fmt"
-    "net/http"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 )
 
-type User struct{
-	uname string  //username
-	psw string  //password
+type User struct {
+	uname string //username
+	psw   string //password
 }
 
 var user_map map[string]User = make(map[string]User)
 
 var my_user User
 
-var messages map[string] []string = make(map[string] []string) 
-//key is username, value is message array
+var message_map map[string][]string = make(map[string][]string)
+
+//key is username, value is array of messages from that user
 
 func login(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -37,10 +38,10 @@ func login(w http.ResponseWriter, r *http.Request) {
 		if is_exist && pending_user.psw == r.PostFormValue("psw") {
 			is_valid = true
 		}
-		if is_valid{
+		if is_valid {
 			my_user = pending_user
 			http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
-		}else{
+		} else {
 			fmt.Fprintf(w, "Your username and password combination is not found")
 		}
 	}
@@ -50,6 +51,7 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		page, err := ioutil.ReadFile("./sign up.html")
+		fmt.Println("inside sign up")
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -59,13 +61,13 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		//check is user exist
 		_, is_exist := user_map[r.PostFormValue("uname")]
-		if is_exist{
+		if is_exist {
 			http.Redirect(w, r, "/fail sign up", http.StatusTemporaryRedirect)
-		}else {
+		} else {
 			// Create new user
-			user_map[r.PostFormValue("uname")] = 
-				User{ r.PostFormValue("uname"), r.PostFormValue("psw") }
-	
+			user_map[r.PostFormValue("uname")] =
+				User{r.PostFormValue("uname"), r.PostFormValue("psw")}
+
 			w.Header().Set("method", "GET")
 			http.Redirect(w, r, "/success sign up", http.StatusTemporaryRedirect)
 		}
@@ -92,7 +94,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	fmt.Fprintf(w, string(page))
-	
+
 }
 func sucess_new_post(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -101,20 +103,49 @@ func sucess_new_post(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// Parse the form
 		r.ParseForm()
-		messages[my_user.uname] = append(messages[my_user.uname], r.PostFormValue("message"))
+		message_map[my_user.uname] = append(message_map[my_user.uname], r.PostFormValue("message"))
 		fmt.Fprintf(w, "successlly posted new message. Please go back")
 	}
 }
 func browse(w http.ResponseWriter, r *http.Request) {
-	for username, message_array := range messages{
-		fmt.Fprintf(w, username)
-		fmt.Fprintf(w, " Posted\n")
-		for _, message := range message_array{
-			
-			fmt.Fprintf(w, message)
+	switch r.Method {
+	case http.MethodGet:
+		//just print everyone's post
+		for username, message_array := range message_map {
+			fmt.Fprintf(w, username)
+			fmt.Fprintf(w, " Posted\n")
+			for _, message := range message_array {
+
+				fmt.Fprintf(w, message)
+			}
 		}
+	case http.MethodPost:
+		// Parse the form
+		r.ParseForm()
+		searched_username := user_map[r.PostFormValue("uname")].uname
+		page := `<!DOCTYPE html>
+				<html lang="en">
+				<head>
+				    <meta charset="UTF-8">
+				    <title>Chat App</title>
+				</head>			
+				<body>
+				    <h1>Browsing post from %s</h1>
+				    %s 
+				</body>				
+				</html>`
+		//show last ten messages from the searched user
+		print_data := ""
+		message_array := message_map[searched_username]
+		if len(message_array) > 10 {
+			message_array = message_array[len(message_array)-10:]
+		}
+		for _, message := range message_array {
+			print_data = print_data + message + "\n"
+		}
+		fmt.Fprintf(w, page, searched_username, print_data)
 	}
-	
+
 }
 func main() {
 	http.HandleFunc("/", login)
@@ -126,5 +157,3 @@ func main() {
 	http.HandleFunc("/browse", browse)
 	http.ListenAndServe(":8080", nil)
 }
-
-
