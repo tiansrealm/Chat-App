@@ -12,11 +12,12 @@ type User struct{
 	psw string  //password
 }
 
-var user_map map[string]User
+var user_map map[string]User = make(map[string]User)
 
 var my_user User
 
-var messages map[string]string //key is username, value is message
+var messages map[string] []string = make(map[string] []string) 
+//key is username, value is message array
 
 func login(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -91,15 +92,38 @@ func home(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	fmt.Fprintf(w, string(page))
+	
 }
-
+func sucess_new_post(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		fmt.Fprintf(w, "Please post from home screen")
+	case http.MethodPost:
+		// Parse the form
+		r.ParseForm()
+		messages[my_user.uname] = append(messages[my_user.uname], r.PostFormValue("message"))
+		fmt.Fprintf(w, "successlly posted new message. Please go back")
+	}
+}
+func browse(w http.ResponseWriter, r *http.Request) {
+	for username, message_array := range messages{
+		fmt.Fprintf(w, username)
+		fmt.Fprintf(w, " Posted\n")
+		for _, message := range message_array{
+			
+			fmt.Fprintf(w, message)
+		}
+	}
+	
+}
 func main() {
-	user_map = make(map[string]User)
 	http.HandleFunc("/", login)
 	http.HandleFunc("/sign up", sign_up)
 	http.HandleFunc("/success sign up", success_sign_up)
 	http.HandleFunc("/fail sign up", fail_sign_up)
 	http.HandleFunc("/home", home)
+	http.HandleFunc("/sucess new post", sucess_new_post)
+	http.HandleFunc("/browse", browse)
 	http.ListenAndServe(":8080", nil)
 }
 
