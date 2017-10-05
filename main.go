@@ -25,7 +25,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		// Parse the form
 		r.ParseForm()
 		// Print the values of the form
-		fmt.Fprintf(w, "post")
+		fmt.Fprintf(w, "login post page")
 	}
 }
 
@@ -44,23 +44,17 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 		user_map[r.PostFormValue("uname")] = 
 			User{ r.PostFormValue("uname"), r.PostFormValue("psw") }
 
-		fmt.Fprintf(w, "Thanks for signing up")
-		http.Get("google.com")
+		w.Header().Set("method", "GET")
+		http.Redirect(w, r, "/thanks_sign_up", http.StatusTemporaryRedirect)
 	}
 }
 
 func thanks_sign_up(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		page, err := ioutil.ReadFile("./thanks_sign_up.html")
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Fprintf(w, string(page))
-	case http.MethodPost:
-		
-		http.Get("http://localhost:8080/")
+	page, err := ioutil.ReadFile("./thanks_sign_up.html")
+	if err != nil {
+		log.Fatal(err)
 	}
+	fmt.Fprintf(w, string(page))
 }
 
 func main() {
