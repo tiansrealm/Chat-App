@@ -8,8 +8,8 @@ import (
 )
 
 type User struct{
-	name string
-	passw string
+	uname string  //username
+	psw string  //password
 }
 var user_map map[string]User
 
@@ -24,8 +24,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// Parse the form
 		r.ParseForm()
-		// Print the values of the form
-		fmt.Fprintf(w, "login post page")
+		// check if valid user
+		is_valid := false
+		User, is_exist := user_map[r.PostFormValue("uname")]
+
+		if is_exist && User.psw == r.PostFormValue("psw") {
+			is_valid = true
+		}
+		fmt.Fprintf(w, "user validity is %t", is_valid)
 	}
 }
 
