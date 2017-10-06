@@ -45,6 +45,7 @@ var my_user *User
 
 //=====================================================================================
 func login(w http.ResponseWriter, r *http.Request) {
+	//handles logining in to account
 	switch r.Method {
 	case http.MethodGet:
 		page, err := ioutil.ReadFile("./login.html")
@@ -71,6 +72,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 func sign_up(w http.ResponseWriter, r *http.Request) {
+	//handles signing up an account
 	switch r.Method {
 	case http.MethodGet:
 		page, err := ioutil.ReadFile("./sign_up.html")
@@ -100,6 +102,7 @@ func success_sign_up(w http.ResponseWriter, r *http.Request) {
 }
 
 func fail_sign_up(w http.ResponseWriter, r *http.Request) {
+	//display the fail to sign up message
 	page, err := ioutil.ReadFile("./fail_sign_up.html")
 	if err != nil {
 		log.Fatal(err)
@@ -108,6 +111,8 @@ func fail_sign_up(w http.ResponseWriter, r *http.Request) {
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
+	//displays the home page where you have various functions
+	// to post, browse posts, log out, delete account
 	page, err := ioutil.ReadFile("./home.html")
 	if err != nil {
 		log.Fatal(err)
@@ -117,6 +122,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 func sucess_new_post(w http.ResponseWriter, r *http.Request) {
+	//store new post and respond with a success message
 	switch r.Method {
 	case http.MethodGet:
 		fmt.Fprintf(w, "Please post from home screen")
@@ -129,6 +135,7 @@ func sucess_new_post(w http.ResponseWriter, r *http.Request) {
 }
 
 func browse(w http.ResponseWriter, r *http.Request) {
+	//displays messsages searched by user from the home page
 	switch r.Method {
 	case http.MethodGet:
 		//shouldnt be here
@@ -167,6 +174,8 @@ func browse(w http.ResponseWriter, r *http.Request) {
 }
 
 func delete_account(w http.ResponseWriter, r *http.Request) {
+	//linked from the home page. This page confirm intent to delete
+	//by asking for username and password again
 	switch r.Method {
 	case http.MethodGet:
 		page, err := ioutil.ReadFile("./delete_account.html")
