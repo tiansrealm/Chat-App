@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"time"
 )
 
 //==================================================================================
@@ -31,28 +32,58 @@ var success_page string = `
 `
 
 //===============================================================================
+const USER_COOKIE_NAME = "user_cookie_name"
+
 type User struct {
 	uname    string   //username
 	psw      string   //password
 	messages []string //twitter posts
 }
 
+//Map of all users
+//key is username, value is pointer to user
 var user_map map[string]*User = make(map[string]*User)
-
-//key is username
 
 var my_user *User
 
 //=====================================================================================
+//helper functions
+
+func cookie_check(r *http.Request) bool {
+	//checks if there's a user cookie
+	cookie, err := r.Cookie(USER_COOKIE_NAME)
+	if err != nil {
+		log.Println(err)
+	}
+	return cookie == nil
+}
+
+func load_html(html_file_name string) string {
+	//read html file, checks for err, and returns data as string
+	page, err := ioutil.ReadFile(html_file_name)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return string(page)
+}
+
+//================================================================================
+//html handling functions
+
 func login(w http.ResponseWriter, r *http.Request) {
 	//handles logining in to account
 	switch r.Method {
 	case http.MethodGet:
-		page, err := ioutil.ReadFile("./login.html")
-		if err != nil {
-			log.Fatal(err)
+		//check if user is logged in with cookies
+		checked_cookie := cookie_check(r)
+		if checked_cookie {
+			//display page for logging in if not logged in
+			fmt.Fprintf(w, load_html("./login.html"))
+		} else {
+			//Go to home page if logged in.
+			http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
 		}
-		fmt.Fprintf(w, string(page))
+
 	case http.MethodPost:
 		r.ParseForm()
 		// check if valid user
@@ -64,6 +95,13 @@ func login(w http.ResponseWriter, r *http.Request) {
 		}
 		if is_valid {
 			my_user = pending_user
+			//create and store cookie for user
+			cookie := http.Cookie{
+				Name:    USER_COOKIE_NAME,
+				Value:   USER_COOKIE_NAME,
+				Expires: time.Now().Add(1 * time.Hour),
+			}
+			http.SetCookie(w, &cookie)
 			http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
 		} else {
 			fmt.Fprintf(w, "Your username and password combination is not found")
@@ -75,11 +113,16 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 	//handles signing up an account
 	switch r.Method {
 	case http.MethodGet:
-		page, err := ioutil.ReadFile("./sign_up.html")
-		if err != nil {
-			log.Fatal(err)
+		//check if user is logged in with cookies
+		checked_cookie := cookie_check(r)
+		if checked_cookie {
+			//display page for signing up if not logged in
+			fmt.Fprintf(w, load_html("./sign_up.html"))
+		} else {
+			//Go to home page if logged in.
+			http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
 		}
-		fmt.Fprintf(w, string(page))
+
 	case http.MethodPost:
 		r.ParseForm()
 		//check is user exist
@@ -98,26 +141,20 @@ func sign_up(w http.ResponseWriter, r *http.Request) {
 }
 
 func success_sign_up(w http.ResponseWriter, r *http.Request) {
+	//tells user he has succeeded in signing up
 	fmt.Fprintf(w, success_page, "You have sucessfully signed up!")
 }
 
 func fail_sign_up(w http.ResponseWriter, r *http.Request) {
 	//display the fail to sign up message
-	page, err := ioutil.ReadFile("./fail_sign_up.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Fprintf(w, string(page))
+	fmt.Fprintf(w, load_html("./fail_sign_up.html"))
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
 	//displays the home page where you have various functions
 	// to post, browse posts, log out, delete account
-	page, err := ioutil.ReadFile("./home.html")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Fprintf(w, string(page))
+
+	fmt.Fprintf(w, load_html("./home.html"))
 
 }
 
@@ -178,11 +215,8 @@ func delete_account(w http.ResponseWriter, r *http.Request) {
 	//by asking for username and password again
 	switch r.Method {
 	case http.MethodGet:
-		page, err := ioutil.ReadFile("./delete_account.html")
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Fprintf(w, string(page))
+		fmt.Fprintf(w, load_html("./delete_account.html"))
+
 	case http.MethodPost:
 		r.ParseForm()
 		searched_user, ok := user_map[r.PostFormValue("uname")]
@@ -204,6 +238,7 @@ func log_out(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 func main() {
+	//sets up web app
 	user_map["admin"] = &User{"admin", "admin", []string{}} //default user for faster testing
 	my_user = nil
 	http.HandleFunc("/", login)
