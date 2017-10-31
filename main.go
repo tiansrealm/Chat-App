@@ -259,15 +259,16 @@ func delete_account(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		r.ParseForm()
-		searched_user, ok := user_map[r.PostFormValue("uname")]
-		if ok && searched_user.psw == r.PostFormValue("psw") {
+		user, ok := user_map[my_user.uname]
+		if !ok {
+			log.Fatal("Deleting user that doesn't exist")
+		}
+		if user.psw == r.PostFormValue("psw") {
 			//delete user
-			delete(user_map, r.PostFormValue("uname"))
-
-			//option to go back to login screen
-			fmt.Fprintf(w, success_page, "Successfully deleted account.")
+			my_user = nil
+			fmt.Fprintf(w, success_page, "You have sucessfully deleted account!")
 		} else {
-			fmt.Fprintf(w, "Incorrect Username and Password combination")
+			fmt.Fprintf(w, "Incorrect Password")
 		}
 	}
 }
