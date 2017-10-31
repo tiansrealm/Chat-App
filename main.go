@@ -1,3 +1,7 @@
+//Creator: Tian lin (tcl344)
+//Main function of twitter like app for
+//Parallel & Dist system class
+
 package main
 
 import (
@@ -49,13 +53,13 @@ var my_user *User
 //=====================================================================================
 //helper functions
 
-func cookie_check(r *http.Request) bool {
+func is_cookie_exist(r *http.Request) bool {
 	//checks if there's a user cookie
 	cookie, err := r.Cookie(USER_COOKIE_NAME)
 	if err != nil {
 		log.Println(err)
 	}
-	return cookie == nil
+	return cookie != nil
 }
 
 func load_html(html_file_name string) string {
@@ -67,22 +71,39 @@ func load_html(html_file_name string) string {
 	return string(page)
 }
 
+func is_valid_session(r *http.Request) bool {
+	//checks cookie and my_user to to see if user recently logged in
+	//return true if valid session, my user exist and has a cookie
+
+	cookie, err := r.Cookie(USER_COOKIE_NAME)
+	if err != nil {
+		log.Println(err)
+	}
+	valid_session := (is_cookie_exist(r) && my_user != nil &&
+		my_user.uname == cookie.Value)
+	return valid_session
+}
+func log_out(w http.ResponseWriter, r *http.Request) {
+	//clears my user and return to login page
+	my_user = nil
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
 //================================================================================
 //html handling functions
 
 func login(w http.ResponseWriter, r *http.Request) {
 	//handles logining in to account
+
+	//check if user is logged in with cookies
+	if is_valid_session(r) {
+		http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
-		//check if user is logged in with cookies
-		checked_cookie := cookie_check(r)
-		if checked_cookie {
-			//display page for logging in if not logged in
-			fmt.Fprintf(w, load_html("./login.html"))
-		} else {
-			//Go to home page if logged in.
-			http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
-		}
+		//display page for logging in if not logged in
+		fmt.Fprintf(w, load_html("./login.html"))
 
 	case http.MethodPost:
 		r.ParseForm()
@@ -98,7 +119,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 			//create and store cookie for user
 			cookie := http.Cookie{
 				Name:    USER_COOKIE_NAME,
-				Value:   USER_COOKIE_NAME,
+				Value:   my_user.uname,
 				Expires: time.Now().Add(1 * time.Hour),
 			}
 			http.SetCookie(w, &cookie)
@@ -111,17 +132,16 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 func sign_up(w http.ResponseWriter, r *http.Request) {
 	//handles signing up an account
+
+	//check if user is logged in with cookies
+	if is_valid_session(r) {
+		http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
-		//check if user is logged in with cookies
-		checked_cookie := cookie_check(r)
-		if checked_cookie {
-			//display page for signing up if not logged in
-			fmt.Fprintf(w, load_html("./sign_up.html"))
-		} else {
-			//Go to home page if logged in.
-			http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
-		}
+		//display page for signing up
+		fmt.Fprintf(w, load_html("./sign_up.html"))
 
 	case http.MethodPost:
 		r.ParseForm()
@@ -150,19 +170,30 @@ func fail_sign_up(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, load_html("./fail_sign_up.html"))
 }
 
+//======the following http handlers requires user to be logged in
+//user's log in is check by check_session func
+
 func home(w http.ResponseWriter, r *http.Request) {
-	//displays the home page where you have various functions
+	//this func display the home page where you have various functions
 	// to post, browse posts, log out, delete account
-
+	if !is_valid_session(r) {
+		log_out(w, r)
+		return
+	}
 	fmt.Fprintf(w, load_html("./home.html"))
-
 }
 
 func sucess_new_post(w http.ResponseWriter, r *http.Request) {
 	//store new post and respond with a success message
+
+	if !is_valid_session(r) {
+		log_out(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
-		fmt.Fprintf(w, "Please post from home screen")
+		//need post from home screen
+		http.Redirect(w, r, "/home", http.StatusTemporaryRedirect)
 	case http.MethodPost:
 		r.ParseForm()
 		my_user.messages = append(my_user.messages, r.PostFormValue("message"))
@@ -173,6 +204,11 @@ func sucess_new_post(w http.ResponseWriter, r *http.Request) {
 
 func browse(w http.ResponseWriter, r *http.Request) {
 	//displays messsages searched by user from the home page
+
+	if !is_valid_session(r) {
+		log_out(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		//shouldnt be here
@@ -213,6 +249,10 @@ func browse(w http.ResponseWriter, r *http.Request) {
 func delete_account(w http.ResponseWriter, r *http.Request) {
 	//linked from the home page. This page confirm intent to delete
 	//by asking for username and password again
+	if !is_valid_session(r) {
+		log_out(w, r)
+		return
+	}
 	switch r.Method {
 	case http.MethodGet:
 		fmt.Fprintf(w, load_html("./delete_account.html"))
@@ -232,11 +272,7 @@ func delete_account(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func log_out(w http.ResponseWriter, r *http.Request) {
-	//clears my user and return to login page
-	my_user = nil
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-}
+//===================================================================================
 func main() {
 	//sets up web app
 	user_map["admin"] = &User{"admin", "admin", []string{}} //default user for faster testing
