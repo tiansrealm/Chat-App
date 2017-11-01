@@ -3,10 +3,10 @@ By - Tian Lin
 
 Written for Parallel and Distributed System Class
 
-
 Twitter like App using Go lang and http
 
-Current Functionalities
+Part 1 
+----------------------------
 
 Login Page (path = "/")
 -Can log in or direct to sign up page
@@ -32,3 +32,20 @@ Browse Page
 TO USE
 go build main.go
 or run main.exe if it already exists
+
+Changes Fixed from Part 1 
+-------------------------------------------------------------------------
+1. Cookies
+-app can tell if user logged in within last hour by comparing cookie and current user data
+-if session expire will automatically logout
+-if session valid with go to home page without logging in
+
+2. no longer able to delete other users. 
+
+3. Messages limited to 100 characters
+
+
+Part 2 - File Systems
+---------------
+
+
