@@ -59,10 +59,11 @@ func main() {
 				//reached end
 				query += newLine[0 : len(newLine)-len(END_TAG)] //append without end tag
 				fmt.Println(query)
-				finished_query := query
+				// finished_query := query
+				// query = "" //reset query
+				// evaluate(finished_query, conn)
+				evaluate(query, conn)
 				query = "" //reset query
-				evaluate(finished_query, conn)
-				break
 			} else {
 				query += newLine //append to read query
 			}
