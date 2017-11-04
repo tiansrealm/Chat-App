@@ -1,7 +1,10 @@
-//Creator: Tian lin (tcl344)
-//Backend for twitter like app for
-//Parallel & Dist system class
+/*Creator: Tian lin (tcl344)
+Parallel & Dist system class
 
+Backend for twitter like app
+listen for client connection
+recieves and respondsto queries
+*/
 package main
 
 import (
@@ -15,23 +18,30 @@ import (
 )
 
 //Map of all users
-//key is username, value is psw
+//key is username, value is password
 
 var user_map map[string]string = make(map[string]string)
 
 const USERLIST_FILENAME = "user_list.txt"
 
-//used to sperate user messages in files
-const USER_MESSAGE_DELIMITER = "<end of message>"
+//used to sperate user messages
+const USER_MESSAGE_SEPERATOR = "<end of message>"
 
-//used to signify end of a communication message
+//protocol
+//protocol
 const END_TAG = "<end>"
+const DOES_USER_EXIST = "does user exist"
+const CHECK_PASS = "check password"
+const DELETE_USER = "delete user"
+const ADD_USER = "add user"
+const ADD_MESSAGE = "add message"
+const READ_MESSAGES = "read messages"
 
 //===================================================================
 //Main Functions
 
+/*main function initialize server socket and listens for queries*/
 func main() {
-	/*main function initialize server socket and listens for queries*/
 
 	//load user list for faster access to a list of current users
 	load_user_list()
@@ -67,19 +77,19 @@ func main() {
 
 }
 
-func evaluate(query string, conn net.Conn) {
-	/*
-		handles queries for
-			checking if user exist,
-			adding new users,
-			write/read message
-		separate string into args by spliting along delimiter ":"
+/*
+	handles queries for
+		checking if user exist,
+		adding new users,
+		write/read message
+	separate string into args by spliting along delimiter ":"
 
-		Pre-Condition:
-		Request will be in the form of "queryname: arg1: arg2: ..."
-		Post Condition:
-		response with be in the form of  "success/error: response"
-	*/
+	Pre-Condition:
+	Request will be in the form of "queryname: arg1: arg2: ..."
+	Post Condition:
+	response with be in the form of  "success/error: response"
+*/
+func evaluate(query string, conn net.Conn) {
 	delimiter := ":"
 	parsed_query := strings.Split(query, delimiter)
 	//trims white space at the ends
@@ -88,102 +98,112 @@ func evaluate(query string, conn net.Conn) {
 	}
 
 	query_function := parsed_query[0]
-	if query_function == "does user exist" {
-		//doesn't need password authentication
-		//args should be query, username
-		if !check_args(parsed_query, 2, conn) {
-			//check args failed
-			return //skip this query
-		}
-		uname := parsed_query[1]
-		_, is_exist := user_map[uname]
-		if is_exist {
-			fmt.Fprintf(conn, "success: true %s \r\n", END_TAG)
+
+	//for all queries, args should start with query, username
+	//all queries have >= 2 args
+	if !check_args(parsed_query, 2, conn) {
+		//check args failed
+		return //skip this query
+	}
+	uname := parsed_query[1]
+
+	//------------------------checking query now--------------------------
+	if query_function == DOES_USER_EXIST {
+		//respond sucess if user exists
+		if _, is_exist := user_map[uname]; is_exist {
+			fmt.Fprintf(conn, "success: user exists %s\n", END_TAG)
 		} else {
-			fmt.Fprintf(conn, "success: false %s \r\n", END_TAG)
+			fmt.Fprintf(conn, "error: no such user %s\n", END_TAG)
 		}
-	} else if query_function == "add user" {
-		//doesn't need password authentication
-		//args should be query, username, psw
-		if !check_args(parsed_query, 3, conn) {
-			//check args failed
-			return //skip this query
-		}
-		uname := parsed_query[1]
-		psw := parsed_query[2]
-		add_user(uname, psw, conn)
+		return
 	} else {
-		//needs password authentication
-		//args should be query, username, password ...
+		// check for more args
 		if !check_args(parsed_query, 3, conn) {
 			//check args failed
 			return //skip this query
-		}
-		if !authenticate(parsed_query[1], parsed_query[2], conn) {
-			//uname and psw don't match
-			return
-		}
-		uname := parsed_query[1]
-		switch query_function {
-		case "delete user":
-			delete_user(uname, conn)
-		case "add message":
-			//args should be query, username, password, message
-			if !check_args(parsed_query, 4, conn) {
-				//check args failed
-				return //skip this query
-			}
-			message := parsed_query[3]
-			add_message(uname, message, conn)
-		case "read messages":
-			//args should be query, username, password, num_message
-			if !check_args(parsed_query, 4, conn) {
-				//check args failed
-				return //skip this query
-			}
-			if num_message, convert_err := strconv.Atoi(parsed_query[3]); convert_err != nil {
-				fmt.Fprintf(conn, "error: Second arg must be integer.%s\n", END_TAG)
-			} else {
-				read_messages(uname, num_message, conn)
-			}
-		default:
-			fmt.Fprintln(os.Stderr, "sent an error response to query\n")
-			fmt.Fprintf(conn, "error: %s is not a valid query.%s\n", parsed_query[0], END_TAG)
 		}
 	}
 
+	//------requires >=3 args
+	if query_function == ADD_USER {
+		//doesn't need password authentication
+		if !check_args(parsed_query, 3, conn) {
+			//check args failed
+			return //skip this query
+		}
+		add_user(uname, parsed_query[2], conn)
+		return
+	} else if query_function == READ_MESSAGES {
+		//args should be query, username, num_message
+
+		if num_message, convert_err := strconv.Atoi(parsed_query[2]); convert_err != nil {
+			fmt.Fprintf(conn, "error: third arg must be integer.%s\n", END_TAG)
+		} else {
+			read_messages(uname, num_message, conn)
+		}
+		return
+	}
+
+	psw := parsed_query[2]
+	//following functions needs password authentication
+	if !authenticate(uname, psw, conn) {
+		//uname and psw don't match
+		return
+	}
+
+	switch query_function {
+	case CHECK_PASS:
+		//reply passed username + password check
+		fmt.Fprintf(conn, "success: correct username and password %s\n", END_TAG)
+		return
+	case DELETE_USER:
+		delete_user(uname, conn)
+		return
+	case ADD_MESSAGE:
+		//args should be query, username, password, message
+		if !check_args(parsed_query, 4, conn) {
+			//check args failed
+			return //skip this query
+		}
+		message := parsed_query[3]
+		add_message(uname, message, conn)
+		return
+	}
+
+	//didn't recongize any valid queries
+	fmt.Fprintf(conn, "error: %s is not a valid query.%s\n", parsed_query[0], END_TAG)
 }
 
 //==========================================================================================
 //Functions that respond to queries, used in Evalute
-//
+//============================================================================================
+
+/*checks if num args from query is AT LEAST the num expected
+sends an error response if num args don't match expected
+return false if args is wrong, true otherwise*/
 func check_args(parsed_query []string, num_expected int, conn net.Conn) bool {
-	/*checks if num args from query is AT LEAST the num expected
-	sends an error response if num args don't match expected
-	return false if args is wrong, true otherwise
-	*/
+
 	if !(len(parsed_query) >= num_expected) {
 		fmt.Fprintf(conn, "error: Not valid # of args%s\n", END_TAG)
 		return false
 	}
 	return true
 }
+
+/*  checks password against username and write error to conn if not match
+also returns false if not match  */
 func authenticate(uname string, psw string, conn net.Conn) bool {
-	/*checks password against username and write error to conn if not match
-	also returns false if not match
-	*/
 	if _, is_exist := user_map[uname]; is_exist && user_map[uname] == psw {
 		return true
 	} else {
-		fmt.Fprintf(conn, "error: Username and Password combination not founc%s\n", END_TAG)
+		fmt.Fprintf(conn, "error: Username and Password combination not found. %s\n", END_TAG)
 		return false
 	}
 }
 
+/*Create new user and write new user info to user list file
+send error response if user already exists*/
 func add_user(uname string, psw string, conn net.Conn) {
-	/*Create new user and write new user info to user list file
-	send error response if user already exists*/
-
 	_, is_exist := user_map[uname]
 	if !is_exist {
 		//create user if not exist
@@ -211,11 +231,9 @@ func add_user(uname string, psw string, conn net.Conn) {
 	}
 }
 
+/*Add a new message under the user with given uname, by
+writing to database file containing stored messsages the user*/
 func add_message(uname string, new_message string, conn net.Conn) {
-	/*
-		Add a new message under the user with given uname, by
-		writing to database file containing stored messsages the user
-	*/
 	filename := uname + ".txt"
 	message_file, open_err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	defer message_file.Close()
@@ -223,7 +241,7 @@ func add_message(uname string, new_message string, conn net.Conn) {
 
 	//write new message to file
 	newline := "\r\n"
-	text_to_write := new_message + newline + USER_MESSAGE_DELIMITER + newline
+	text_to_write := new_message + newline + USER_MESSAGE_SEPERATOR + newline
 	if _, write_err := message_file.WriteString(text_to_write); write_err != nil {
 		fmt.Fprintf(conn, "error: server failed to write.%s\n", END_TAG)
 		panic(write_err)
@@ -232,10 +250,10 @@ func add_message(uname string, new_message string, conn net.Conn) {
 	}
 
 }
+
+/*deletes user from userlist file and delete message file asscioated with that user
+pre-condition: user exists, use authenticate func to check for that*/
 func delete_user(uname string, conn net.Conn) {
-	/*deletes user from userlist file and delete message file asscioated with that user
-	pre-condition: user exists, use authenticate func to check for that
-	*/
 	//delete user from server memory
 	delete(user_map, uname)
 	err := rewrite_userlist() //delete user from user list file
@@ -245,9 +263,9 @@ func delete_user(uname string, conn net.Conn) {
 	//repond sucess
 	fmt.Fprintf(conn, "success: Deleted user %s.%s\n", uname, END_TAG)
 }
-func read_messages(uname string, num_messages int, conn net.Conn) {
-	/*reads messages from user file database*/
 
+/*reads messages from user file database*/
+func read_messages(uname string, num_messages int, conn net.Conn) {
 	filename := uname + ".txt"
 	message_file, open_err := os.OpenFile(filename, os.O_CREATE|os.O_RDONLY, 0600)
 	defer message_file.Close()
@@ -258,7 +276,7 @@ func read_messages(uname string, num_messages int, conn net.Conn) {
 
 	messages_in_string := string(messages_in_byte)
 
-	message_array := strings.SplitAfter(messages_in_string, USER_MESSAGE_DELIMITER)
+	message_array := strings.SplitAfter(messages_in_string, USER_MESSAGE_SEPERATOR)
 	recent_messages := message_array
 	if num_messages < len(message_array) {
 		//only show recent num messages if there exist more than that
@@ -273,12 +291,11 @@ func read_messages(uname string, num_messages int, conn net.Conn) {
 	fmt.Fprintf(conn, "success: %s%s\n", response, END_TAG)
 }
 
-//-----------------------file operations
+//-----------------------file operations-----------------------------------------------
 
+/*loads list of existing users from file database into server memory
+for faster checks that user exist*/
 func load_user_list() {
-	/*loads list of existing users from file database into server memory
-	for faster checks that user exist
-	*/
 	file, err := os.OpenFile(USERLIST_FILENAME, os.O_CREATE|os.O_RDONLY, 0600)
 	defer file.Close()
 	check_err(err)
@@ -294,7 +311,10 @@ func load_user_list() {
 
 }
 
+/*rewrite list of existing user from server memory to userlist. Needed after removing a user*/
 func rewrite_userlist() error {
+	os.Remove(USERLIST_FILENAME) //delete old file
+	//rewrite new user list file
 	file, err := os.OpenFile(USERLIST_FILENAME, os.O_CREATE|os.O_WRONLY, 0600)
 	defer file.Close()
 	if err != nil {
@@ -310,23 +330,19 @@ func rewrite_userlist() error {
 	return nil //no errors = success
 }
 
-//--------------repeated functions
+//--------------common functions
 
+//basic check for err
 func check_err(err error) {
-	//basic check for err
 	if err != nil {
 		panic(err)
 	}
 }
 
+//check for error and notify error  to conn if there is
 func check_err_and_repond(err error, conn net.Conn) {
-	//check for error and notify error  to conn if there is
 	if err != nil {
 		fmt.Fprintf(conn, "error: Server failure%s\n", END_TAG)
 		panic(err)
 	}
 }
-
-/*to do
-delete user
-*/

@@ -39,7 +39,7 @@ func main() {
 				break
 			}
 		}
-		response = strings.Replace(response, END_TAG, "", -1) //remove tag
-		fmt.Println(response)
+		response = strings.Replace(response, END_TAG, "", 1) //remove tag
+		fmt.Print(response + "\n")
 	}
 }
