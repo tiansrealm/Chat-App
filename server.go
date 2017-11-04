@@ -28,7 +28,6 @@ const USERLIST_FILENAME = "user_list.txt"
 const USER_MESSAGE_SEPERATOR = "<end of message>"
 
 //protocol
-//protocol
 const END_TAG = "<end>"
 const DOES_USER_EXIST = "does user exist"
 const CHECK_PASS = "check password"
@@ -60,10 +59,7 @@ func main() {
 			if index_of_endtag != -1 {
 				//reached end
 				query += newLine[0 : len(newLine)-len(END_TAG)] //append without end tag
-				fmt.Println("Got query: " + query)
-				// finished_query := query
-				// query = "" //reset query
-				// evaluate(finished_query, conn)
+				//fmt.Println("Got query: " + query)
 				evaluate(query, conn)
 				query = "" //reset query
 			} else {
