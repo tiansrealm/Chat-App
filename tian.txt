@@ -1,6 +1,0 @@
-test message
-<end of message>
-test message
-<end of message>
-test message
-<end of message>

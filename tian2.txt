@@ -1,4 +1,0 @@
-tian 2 says hi
-<end of message>
-tian 2 says hi        again
-<end of message>
