@@ -68,7 +68,7 @@ All operations to the files/database is done through server
 
 
 ------------------------------
-web app info from Part 1 
+Web app info from Part 1 
 ----------------------------
 main.go is a user web app.
 

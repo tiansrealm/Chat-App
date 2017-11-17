@@ -33,6 +33,9 @@ const ADD_USER = "add user"
 const ADD_MESSAGE = "add message"
 const READ_MESSAGES = "read messages"
 
+//server info
+const SERVER_PORT = "8083"
+
 type User struct {
 	uname string //username
 	psw   string //password
@@ -84,7 +87,7 @@ func log_out(w http.ResponseWriter, r *http.Request) {
 */
 func query_server(args []string) []string {
 	//connect to server
-	serverConn, err := net.Dial("tcp", "localhost:8083")
+	serverConn, err := net.Dial("tcp", "localhost:"+SERVER_PORT)
 	defer serverConn.Close()
 	if err != nil {
 		log.Fatal("Failed connect to server\n")
@@ -102,7 +105,7 @@ func query_server(args []string) []string {
 	} else {
 		log.Fatal("invalid number of args for query")
 	}
-	fmt.Printf("sending: %s\n", query)
+	//fmt.Printf("sending: %s\n", query)
 	fmt.Fprintf(serverConn, query)
 
 	//-------------recieving response

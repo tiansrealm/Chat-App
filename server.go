@@ -31,51 +31,72 @@ const USER_MESSAGE_SEPERATOR = "<end of message>"
 const END_TAG = "<end>"
 const DOES_USER_EXIST = "does user exist"
 const CHECK_PASS = "check password"
-const DELETE_USER = "delete user"
 const ADD_USER = "add user"
+const DELETE_USER = "delete user"
 const ADD_MESSAGE = "add message"
 const READ_MESSAGES = "read messages"
 
-//===================================================================
-//Main Functions
+/*types of queries
+DOES_USER_EXIST: uname  END_TAG
+CHECK_PASS: uname: psw  END_TAG
+ADD_USER: uname: psw    END_TAG
+DELETE_USER: uname: psw END_TAG
+READ_MESSAGES: uname: num messages END_TAG
+ADD_MESSAGE: uname: psw : message  END_TAG
+*/
 
-/*main function initialize server socket and listens for queries*/
+//============================Primary Functions======================================
+
+/*main function
+initialize server socket and listens for queries.
+Upon accepting a new client, server will create new go rountine to handle
+that client concurrently
+*/
 func main() {
-
 	//load user list for faster access to a list of current users
 	load_user_list()
 	in, _ := net.Listen("tcp", ":8083")
 	defer in.Close()
 
-	for {
+	client_id := 0
+
+	for { //loop accepting clients to accept many clients
 		conn, _ := in.Accept()
-		fmt.Fprintln(os.Stderr, "Got a connection")
-		scanner := bufio.NewScanner(conn)
-		query := ""
-		for scanner.Scan() {
-			fmt.Println("-------------------------------------------")
-			newLine := scanner.Text()
-			index_of_endtag := strings.Index(newLine, END_TAG)
-			if index_of_endtag != -1 {
-				//reached end
-				query += newLine[0 : len(newLine)-len(END_TAG)] //append without end tag
-				//fmt.Println("Got query: " + query)
-				evaluate(query, conn)
-				query = "" //reset query
-			} else {
-				query += newLine //append to read query
-			}
-		}
-		//interupted
-		fmt.Fprintln(os.Stderr, "connection gone!") //print ln have \n
-		conn.Close()
+		fmt.Fprintf(os.Stderr, "Got a connection for Client %d\n", client_id)
+		go handle_client(conn, client_id) //new go routine to handle new client
+		client_id++
 	}
 
 }
 
+/*scans query messages from the cient connection and
+calls evalute() to perform appropriate actions
+*/
+func handle_client(conn net.Conn, client_id int) {
+	scanner := bufio.NewScanner(conn)
+	query := ""
+	for scanner.Scan() {
+		newLine := scanner.Text()
+		index_of_endtag := strings.Index(newLine, END_TAG)
+		if index_of_endtag != -1 {
+			//reached end
+			query += newLine[0 : len(newLine)-len(END_TAG)] //append without end tag
+			//fmt.Println("Got query: " + query)
+			evaluate(query, conn)
+			query = "" //reset query
+		} else {
+			query += newLine //append to read query
+		}
+	}
+	//interupted
+	fmt.Fprintf(os.Stderr, "Connection gone from Client %d!\n", client_id)
+	conn.Close()
+}
+
 /*
 	handles queries for
-		checking if user exist,
+		checking if
+		user exist,
 		adding new users,
 		write/read message
 	separate string into args by spliting along delimiter ":"
@@ -95,6 +116,20 @@ func evaluate(query string, conn net.Conn) {
 
 	query_function := parsed_query[0]
 
+	//check if query function is valid
+	valid_queries := []string{DOES_USER_EXIST, CHECK_PASS, ADD_USER, DELETE_USER, ADD_MESSAGE, READ_MESSAGES}
+	is_valid_query := false
+	for _, query := range valid_queries {
+		if query_function == query {
+			is_valid_query = true
+		}
+	}
+	if !is_valid_query {
+		//not a  valid queries
+		fmt.Fprintf(conn, "error: %s is not a valid query.%s\n", parsed_query[0], END_TAG)
+		return
+	}
+
 	//for all queries, args should start with query, username
 	//all queries have >= 2 args
 	if !check_args(parsed_query, 2, conn) {
@@ -103,7 +138,7 @@ func evaluate(query string, conn net.Conn) {
 	}
 	uname := parsed_query[1]
 
-	//------------------------checking query now--------------------------
+	//check the only 2 arg query, does user exist, else check for >= 3 args
 	if query_function == DOES_USER_EXIST {
 		//respond sucess if user exists
 		if _, is_exist := user_map[uname]; is_exist {
@@ -120,13 +155,9 @@ func evaluate(query string, conn net.Conn) {
 		}
 	}
 
-	//------requires >=3 args
+	//------following requires >=3 args; passed checked args 3 above
 	if query_function == ADD_USER {
 		//doesn't need password authentication
-		if !check_args(parsed_query, 3, conn) {
-			//check args failed
-			return //skip this query
-		}
 		add_user(uname, parsed_query[2], conn)
 		return
 	} else if query_function == READ_MESSAGES {
@@ -150,6 +181,7 @@ func evaluate(query string, conn net.Conn) {
 	switch query_function {
 	case CHECK_PASS:
 		//reply passed username + password check
+		//already passed when called authenticate
 		fmt.Fprintf(conn, "success: correct username and password %s\n", END_TAG)
 		return
 	case DELETE_USER:
@@ -165,13 +197,10 @@ func evaluate(query string, conn net.Conn) {
 		add_message(uname, message, conn)
 		return
 	}
-
-	//didn't recongize any valid queries
-	fmt.Fprintf(conn, "error: %s is not a valid query.%s\n", parsed_query[0], END_TAG)
 }
 
 //==========================================================================================
-//Functions that respond to queries, used in Evalute
+//Functions that respond to queries, used by Evalute
 //============================================================================================
 
 /*checks if num args from query is AT LEAST the num expected
@@ -263,7 +292,7 @@ func delete_user(uname string, conn net.Conn) {
 /*reads messages from user file database*/
 func read_messages(uname string, num_messages int, conn net.Conn) {
 	filename := uname + ".txt"
-	message_file, open_err := os.OpenFile(filename, os.O_CREATE|os.O_RDONLY, 0600)
+	message_file, open_err := os.OpenFile(filename, os.O_CREATE, 0600) //create file if not exist
 	defer message_file.Close()
 	check_err_and_repond(open_err, conn)
 
@@ -273,12 +302,13 @@ func read_messages(uname string, num_messages int, conn net.Conn) {
 	messages_in_string := string(messages_in_byte)
 
 	message_array := strings.SplitAfter(messages_in_string, USER_MESSAGE_SEPERATOR)
+	message_array = message_array[0 : len(message_array)-1] //last index is empty cause of how splitafter works
 	recent_messages := message_array
 	if num_messages < len(message_array) {
 		//only show recent num messages if there exist more than that
 		recent_messages = message_array[len(message_array)-num_messages:]
 	}
-	fmt.Fprintf(os.Stderr, "printing message%s\n", recent_messages)
+	//fmt.Fprintf(os.Stderr, "printing message%s\n", recent_messages)
 	//give back most recent num_messages of messages
 	response := ""
 	for _, message := range recent_messages {
