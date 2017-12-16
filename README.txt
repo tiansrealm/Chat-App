@@ -1,4 +1,4 @@
-# Twitter-App
+# Twitter_Like_App
 By - Tian Lin
 
 Written for Parallel and Distributed System Class
@@ -16,17 +16,36 @@ run main.exe
 use web brower to access http://localhost:8080/  
 which is the main page for the web app
 
-------------------------------------------------------------------
-Errors fixed from Part 1 !
-------------------------------------------------------------------
-1. Cookies
--app can tell if user logged in within last hour by comparing cookie and current user data
--if session expire will automatically logout
--if session valid with go to home page without logging in
 
-2. no longer able to delete other users. 
 
-3. Messages limited to 100 characters
+------------------------------------------------------------------
+Part 3 - Concurrency
+------------------------------------------------------------------
+
+
+------conceptual design----------------------
+Client queries are now handled in go rountines. 
+One go rountine for each new client.
+
+Use sync.mutex locks to prevent read/write to the same file, 
+but not to different file.
+Since each file stores a user's messages,
+this means read/write can be done on different user's messages,
+but not on the same user.
+
+--------implementation details------------
+Shared data that needs to be protected are:
+user_map  : which is a online cache of the userlist.txt file
+.txt files : all the user datas all stored in text files
+
+--------mutex setup-----------
+mutexes are create for the usermap, and for every .txt file that is 
+being read or written to.
+Mutexes for files are stored in a map called lock_for_files_map,
+where key is filename and value is the mutex associate with that file.
+
+
+
 
 
 ------------------------------------------------------------------
@@ -92,4 +111,5 @@ Home Page
 
 Browse Page
 -displays result from the search from home page
+-can other user's message by specifying username.
 

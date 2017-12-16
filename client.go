@@ -32,7 +32,7 @@ func main() {
 		response := ""
 		for scannerConn.Scan() {
 			newLine := scannerConn.Text()
-			response += newLine //append to read query
+			response += newLine + "\n" //append to read query
 			index_of_endtag := strings.Index(newLine, END_TAG)
 			if index_of_endtag != -1 {
 				//reached end of response
@@ -40,6 +40,6 @@ func main() {
 			}
 		}
 		response = strings.Replace(response, END_TAG, "", 1) //remove tag
-		fmt.Print(response + "\n")
+		fmt.Print(response)
 	}
 }

@@ -24,9 +24,6 @@ const USERLIST_FILENAME = "user_list.txt"
 //used to sperate user messages
 const USER_MESSAGE_SEPERATOR = "<end of message>"
 
-//used to denote that file is used for holding subscriptions
-const SUBSCRIPTION_FILE_TAG = "_sublist.txt"
-
 //protocol
 const END_TAG = "<end>"
 const DOES_USER_EXIST = "does user exist"
@@ -35,9 +32,6 @@ const ADD_USER = "add user"
 const DELETE_USER = "delete user"
 const ADD_MESSAGE = "add message"
 const READ_MESSAGES = "read messages"
-const SUB = "subscribe"
-const UNSUB = "unsubscribe"
-const SUB_FEED = "get sub feed"
 
 /*types of queries
 DOES_USER_EXIST: uname  END_TAG
@@ -46,9 +40,6 @@ ADD_USER: uname: psw    END_TAG
 DELETE_USER: uname: psw END_TAG
 READ_MESSAGES: uname: num messages END_TAG
 ADD_MESSAGE: uname: psw : message  END_TAG
-SUB: uname: psw: sub_uname END_TAG
-UNSUB: uname: psw: sub_uname END_TAG
-SUB_FED: uname: psw: num_messages END_TAG
 */
 
 //--------------DATA---------------------------
@@ -140,8 +131,7 @@ func evaluate(query string, conn net.Conn) {
 	query_function := parsed_query[0]
 
 	//check if query function is valid
-	valid_queries := []string{DOES_USER_EXIST, CHECK_PASS, ADD_USER, DELETE_USER,
-		ADD_MESSAGE, READ_MESSAGES, SUB, UNSUB, SUB_FEED}
+	valid_queries := []string{DOES_USER_EXIST, CHECK_PASS, ADD_USER, DELETE_USER, ADD_MESSAGE, READ_MESSAGES}
 	is_valid_query := false
 	for _, query := range valid_queries {
 		if query_function == query {
@@ -191,7 +181,6 @@ func evaluate(query string, conn net.Conn) {
 	}
 
 	psw := parsed_query[2]
-
 	//following functions needs password authentication
 	if !authenticate(uname, psw, conn) {
 		//uname and psw don't match
@@ -215,29 +204,6 @@ func evaluate(query string, conn net.Conn) {
 		}
 		message := parsed_query[3]
 		add_message(uname, message, conn)
-		return
-	case SUB:
-		if !check_args(parsed_query, 4, conn) {
-			//check args failed
-			return //skip this query
-		}
-		sub_uname := parsed_query[3]
-		subscribe(uname, sub_uname, conn)
-		return
-	case UNSUB:
-		if !check_args(parsed_query, 4, conn) {
-			//check args failed
-			return //skip this query
-		}
-		sub_uname := parsed_query[3]
-		unsubscribe(uname, sub_uname, conn)
-		return
-	case SUB_FEED:
-		if num_messages, convert_err := strconv.Atoi(parsed_query[3]); convert_err != nil {
-			fmt.Fprintf(conn, "error: fourth arg must be integer.%s\n", END_TAG)
-		} else {
-			sub_feed(uname, num_messages, conn)
-		}
 		return
 	}
 }
@@ -369,7 +335,7 @@ func delete_user(uname string, conn net.Conn) {
 locks message file of user*/
 func read_messages(uname string, num_messages int, conn net.Conn) {
 	filename := uname + ".txt"
-	create_and_lock(filename) // lock user message file
+	create_and_lock(filename) // lock user message file for reading
 	defer lock_for_files_map[filename].Unlock()
 
 	message_file, open_err := os.OpenFile(filename, os.O_CREATE, 0600) //create file if not exist
@@ -396,130 +362,6 @@ func read_messages(uname string, num_messages int, conn net.Conn) {
 	}
 	fmt.Fprintf(conn, "success: %s%s\n", response, END_TAG)
 }
-func sub_feed(uname string, num_messages int, conn net.Conn) {
-	sub_filename := uname + SUBSCRIPTION_FILE_TAG
-	create_and_lock(sub_filename)
-	defer lock_for_files_map[sub_filename].Unlock()
-
-	//open sublist file and store subscribed names to sublist
-	sublist_file, open_err := os.OpenFile(sub_filename, os.O_CREATE|os.O_RDONLY, 0600)
-	defer sublist_file.Close()
-	check_err_and_repond(open_err, conn)
-
-	sublist := []string{}
-	scanner := bufio.NewScanner(sublist_file)
-	for scanner.Scan() {
-		scanned_name := scanner.Text()
-		sublist = append(sublist, scanned_name)
-	}
-	response := ""
-	//append num_messages frome each sub_uname
-	for _, sub_uname := range sublist {
-		message_filename := sub_uname + ".txt"
-		create_and_lock(message_filename) // lock user message file
-
-		message_file, open_err := os.OpenFile(message_filename, os.O_CREATE, 0600) //create file if not exist
-		defer message_file.Close()
-		check_err_and_repond(open_err, conn)
-
-		messages_in_byte, read_err := ioutil.ReadFile(message_filename)
-		check_err_and_repond(read_err, conn)
-
-		messages_in_string := string(messages_in_byte)
-
-		message_array := strings.SplitAfter(messages_in_string, USER_MESSAGE_SEPERATOR)
-		message_array = message_array[0 : len(message_array)-1] //last index is empty cause of how splitafter works
-		recent_messages := message_array
-		if num_messages < len(message_array) {
-			//only show recent num messages if there exist more than that
-			recent_messages = message_array[len(message_array)-num_messages:]
-		}
-		response += "<br /><b>Recent messages from - " + sub_uname + "</b><br />"
-		for _, message := range recent_messages {
-			response += message + "\n"
-		}
-
-		lock_for_files_map[message_filename].Unlock()
-	}
-	fmt.Fprintf(conn, "success: %s%s\n", response, END_TAG)
-
-}
-
-/*subscribes user to another user by writing sub_uname, the subscribe target,
-in the main user's sublist.txt*/
-func subscribe(uname string, sub_uname string, conn net.Conn) {
-	filename := uname + SUBSCRIPTION_FILE_TAG
-	create_and_lock(filename)
-	defer lock_for_files_map[filename].Unlock()
-
-	//open sublist file
-	sublist_file, open_err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND, 0600)
-	defer sublist_file.Close()
-	check_err_and_repond(open_err, conn)
-
-	//scan file to see if subscription exists
-	scanner := bufio.NewScanner(sublist_file)
-	for scanner.Scan() {
-		scanned_name := scanner.Text()
-		//check if already subscribed
-		if scanned_name == sub_uname {
-			//already subscribed so do nothing
-			fmt.Fprintf(conn, "success: Already subscribed.%s\n", END_TAG)
-			return
-		}
-	}
-
-	//subscription don't exist, so add subscription
-	text := sub_uname + "\n"
-	if _, write_err := sublist_file.WriteString(text); write_err != nil {
-		check_err_and_repond(write_err, conn)
-	} else {
-		fmt.Fprintf(conn, "success: Added subscription.%s\n", END_TAG)
-	}
-}
-
-/*un-subscribes user to another user by deleting sub_uname, the subscribe target,
-from the main user's sublist.txt*/
-func unsubscribe(uname string, sub_uname string, conn net.Conn) {
-	filename := uname + SUBSCRIPTION_FILE_TAG
-	create_and_lock(filename)
-	defer lock_for_files_map[filename].Unlock()
-
-	//open sublist file
-	sublist_file, open_err := os.OpenFile(filename, os.O_CREATE|os.O_RDONLY, 0600)
-	check_err_and_repond(open_err, conn)
-
-	sublist := []string{}
-	removed := false
-	//scan file to see if subscription exists
-	scanner := bufio.NewScanner(sublist_file)
-	for scanner.Scan() {
-		scanned_name := scanner.Text()
-
-		if scanned_name == sub_uname {
-			removed = true //didn't add scanned_name to sublist
-			continue
-		} else {
-			sublist = append(sublist, scanned_name)
-		}
-	}
-	sublist_file.Close()
-	//rewrite file if removed sub_uname
-	if removed {
-		os.Remove(filename)
-		new_sublist_file, open_err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY, 0600)
-		defer new_sublist_file.Close()
-		check_err_and_repond(open_err, conn)
-
-		for _, uname := range sublist {
-			text := uname + "\n"
-			_, write_err := new_sublist_file.WriteString(text)
-			check_err_and_repond(write_err, conn)
-		}
-
-	}
-	fmt.Fprintf(conn, "success: removed subscription.%s\n", END_TAG)
-}
 
 //-----------------------userlist operations-----------------------------------------------
 
@@ -527,7 +369,7 @@ func unsubscribe(uname string, sub_uname string, conn net.Conn) {
 for faster checks that user exist
 Locks userlist file and usermap in memory*/
 func load_user_list() {
-	create_and_lock(USERLIST_FILENAME) // lock userlist file
+	create_and_lock(USERLIST_FILENAME) // lock userlist file for reading
 	defer lock_for_files_map[USERLIST_FILENAME].Unlock()
 
 	file, err := os.OpenFile(USERLIST_FILENAME, os.O_CREATE|os.O_RDONLY, 0600)
