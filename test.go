@@ -2,14 +2,15 @@ package main
 
 import "fmt"
 
-var user_map map[int]string = make(map[int]string)
-
 func main() {
-	t := Test{"test"}
-	t2 := &t
-	fmt.Println(t2.name)
-}
+	array := []int{1, 2, 3, 4, 5}
 
-type Test struct {
-	name string
+	for i := 0; i < 3; i++ {
+		for _, x := range array {
+			if x == 3 {
+				continue
+			}
+			fmt.Println(x)
+		}
+	}
 }

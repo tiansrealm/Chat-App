@@ -10,11 +10,68 @@ TO USE
 go build server.go
 run server.exe
 
-go build main.go
-run main.exe 
+go build webapp.go   //renamed from main.go in last part
+run webapp.exe 
 
 use web brower to access http://localhost:8080/  
 which is the main page for the web app
+
+*replicas
+go build replica.go
+run replica.exe in ANOTHER folder. This is simulating the replica being in a different computer
+Can run replica.exe in multiple folders.
+
+------------------------------------------------------------------
+Part 4 - replication
+------------------------------------------------------------------
+
+
+Passive(primary) backup
+startup: 
+server.go is the primary replica. There can be unlimited number of other replicas
+A go routine is called in server.go to listen for new replica's connections.
+
+1.Request: FE issues the request, containing a
+unique identifier, to the primary replica
+manager.
+
+webapp use attached a unique identifier (combination of ip adress and message number) 
+to each query request
+
+2. Coordination: primary takes each request
+atomically, in the order in which it receives it,
+filtering duplicates (based on identifier)
+
+server.go(the main replica) will filter duplicate requests
+
+3. Execution: primary executes the request and
+stores the response.
+
+server.go executes the requestand  stores response
+
+4. Agreement: If request is an update, then
+primary sends the updated state, the response
+and the unique identifier to all the backups. The
+backups send an acknowledgement.
+
+If the request was an update server.go waits for all existing replicas to reply acknolegments
+
+5. Response: primary responds to FE, which
+hands the response back to the client.
+
+Finally server.go responds to the client 
+
+
+	-----------------------------------------
+	Errors fixed and Changed from last part
+	-----------------------------------------
+Added Subscription functionality that was missing.
+
+From Home page:
+Can subscribe to another user
+can unsubscribe
+click See my subscription feed to see recent 3 messages from all subscribed users
+
 
 
 
@@ -87,7 +144,7 @@ All operations to the files/database is done through server
 
 
 ------------------------------
-Web app info from Part 1 
+Part 1: Web App 
 ----------------------------
 main.go is a user web app.
 

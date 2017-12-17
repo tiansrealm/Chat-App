@@ -73,12 +73,6 @@ var query_history = []string{}
 //A lock for the above ] query_history array
 var query_history_lock = sync.Mutex{}
 
-//connections to backup relpicas
-var replica_list = make([]net.Conn, 0)
-
-//A lock for the above ] replica_list array
-var replica_list_lock = sync.Mutex{}
-
 //============================Primary Functions======================================
 
 /*main function
@@ -87,82 +81,51 @@ Upon accepting a new client, server will create new go rountine to handle
 that client concurrently
 */
 func main() {
-	go add_replicas() //continous be able to add new replicas
+	//establish connection to the primary replica
+	//connect to server
+	conn_main_replica, err := net.Dial("tcp", "localhost:8084")
+	defer conn_main_replica.Close()
+	if err != nil {
+		panic("Failed connect to conn_main_replica\n")
+	}
+
 	//load user list for faster access to a list of current users
 	load_user_list()
-	//listen to connections from users
-	in, _ := net.Listen("tcp", ":8083")
-	defer in.Close()
-
-	client_id := 0
-	for { //loop accepting clients to accept many clients
-		conn, _ := in.Accept()
-		fmt.Fprintf(os.Stderr, "Got a connection for Client %d\n", client_id)
-		go handle_client(conn, client_id) //new go routine to handle new client
-		client_id++
-	}
-
-}
-
-/*continously listen for new replicas
-should be called in a go routine*/
-func add_replicas() {
-	//establish connection to backup replicas
-	in_replicas, _ := net.Listen("tcp", ":8084")
-	defer in_replicas.Close()
-	for {
-		new_replica_conn, _ := in_replicas.Accept()
-		fmt.Println("Got new replica connection")
-		replica_list = append(replica_list, new_replica_conn)
-	}
+	handle_requests(conn_main_replica)
 }
 
 /*scans query messages from the cient connection and
 calls evalute() to perform appropriate actions
 write the response returned by evalute to the conn
 */
-func handle_client(conn net.Conn, client_id int) {
+func handle_requests(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
 	query := ""
-Query_Scanning:
 	for scanner.Scan() {
+		fmt.Println("scanning")
 		newLine := scanner.Text()
+		fmt.Println(newLine)
 		index_of_endtag := strings.Index(newLine, END_TAG)
 		if index_of_endtag != -1 {
-			//reached end
+			//reached end of query
+			fmt.Println("Got query: " + query)
 			query += newLine[0 : len(newLine)-len(END_TAG)] //append without end tag
-			//fmt.Println("Got query: " + query)
-
-			//check if duplicate query. Note:query should already have unique identifier from front end
-			for _, old_query := range query_history {
-				if query == old_query {
-					query = "" //reset query
-					fmt.Fprintf(conn, "error: duplicated queries %s, and %s .%s", query, old_query, END_TAG)
-					continue Query_Scanning //do not evalute the duplicate query
-				}
-			}
-			response, is_updated := evaluate(query)
+			_, is_updated := evaluate(query)
 			if is_updated {
-				//wait for acknolegdement that backup replicas have updated
-				for _, replica_conn := range replica_list {
-					fmt.Fprint(replica_conn, query+END_TAG+"\n")
-					replica_scanner := bufio.NewScanner(replica_conn)
-					replica_scanner.Scan()
-				}
-
+				fmt.Fprint(conn, "sucess\n")
+			} else {
+				panic("suppose to recieve query that does updates")
 			}
-			query_history = append(query_history, query)
 			query = "" //reset query
 
-			fmt.Fprint(conn, response)
 		} else {
 			query += newLine //append to read query
 		}
 	}
-	//interupted
-	fmt.Fprintf(os.Stderr, "Connection gone from Client %d!\n", client_id)
 	conn.Close()
 }
+
+//below is identical code to main replica---------------------------------------
 
 /*
 	handles queries for

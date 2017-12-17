@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -57,6 +58,10 @@ type User struct {
 }
 
 var my_user *User
+
+//ip address + request_num server as unique identifier for query requests
+const IP_ADDRESS = "68.132.xxx.xxx" //example ip adress
+var request_num = 0                 //used as unique message number for requests to server
 
 //-----------------------helper functions ------------------------------------
 
@@ -111,17 +116,22 @@ func query_server(args []string) []string {
 
 	//----------------------sending query
 	query := ""
+	unique_identifier := IP_ADDRESS + strconv.Itoa(request_num)
 	if len(args) == 2 {
-		query = fmt.Sprintf("%s:%s %s\n", args[0], args[1], END_TAG)
+		query = fmt.Sprintf("%s:%s:%s %s\n", args[0], args[1],
+			unique_identifier, END_TAG)
 	} else if len(args) == 3 {
-		query = fmt.Sprintf("%s:%s:%s %s\n", args[0], args[1], args[2], END_TAG)
+		query = fmt.Sprintf("%s:%s:%s:%s %s\n", args[0], args[1], args[2],
+			unique_identifier, END_TAG)
 	} else if len(args) == 4 {
-		query = fmt.Sprintf("%s:%s:%s:%s %s\n", args[0], args[1], args[2], args[3], END_TAG)
+		query = fmt.Sprintf("%s:%s:%s:%s:%s %s\n", args[0], args[1], args[2], args[3],
+			unique_identifier, END_TAG)
 	} else {
 		log.Fatal("invalid number of args for query")
 	}
 	//fmt.Printf("sending: %s\n", query)
 	fmt.Fprintf(serverConn, query)
+	request_num += 1 //update identifier so next message isn't the same
 
 	//-------------recieving response
 	response := ""
